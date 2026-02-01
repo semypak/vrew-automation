@@ -365,6 +365,12 @@ def main():
     credits = get_user_credits(access_token, user_id) if user_id else 0
     st.session_state["credits"] = credits
 
+    # 크레딧 0이면 자동 로그아웃
+    if credits <= 0:
+        st.error("🎫 크레딧이 없습니다. 자동 로그아웃됩니다.")
+        sign_out()
+        st.rerun()
+
     # 상단 사용자 정보 바
     user_cols = st.columns([3, 1, 1])
     with user_cols[0]:
