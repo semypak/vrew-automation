@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Outputs (generated files)
+outputs/
+
+# Source files (user uploads)
+source/
+
+# IDE
+.vscode/
+.idea/
+
+# Debug/test files
+debug_*.py
+verify_*.py
+test_*.py
+check_*.py
+inspect_*.py
+
+# OS
+.DS_Store
+Thumbs.db
