@@ -1054,7 +1054,14 @@ def main():
                         st.error("크레딧 차감에 실패했습니다.")
                         st.stop()
 
-                    st.session_state["credits"] = current_credits - 1
+                    new_credits = current_credits - 1
+                    st.session_state["credits"] = new_credits
+
+                    # 크레딧 0회 시 자동 로그아웃
+                    if new_credits <= 0:
+                        st.warning("🎫 크레딧이 모두 소진되었습니다. 로그아웃됩니다.")
+                        sign_out()
+                        st.rerun()
 
                     with st.spinner("Vrew 파일 생성 중..."):
                         try:

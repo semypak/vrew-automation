@@ -28,15 +28,42 @@ def get_auth_headers(access_token):
     }
 
 
-def sign_up(email: str, password: str, invite_code: str, youtube_id: str = "") -> dict:
+def check_youtube_id_exists(youtube_id: str) -> bool:
+    """유튜브 멤버십 ID 중복 확인"""
+    if not youtube_id:
+        return False
+
+    url = f"{SUPABASE_URL}/rest/v1/profiles"
+    params = {
+        "youtube_membership_id": f"eq.{youtube_id}",
+        "select": "id"
+    }
+
+    try:
+        response = requests.get(url, params=params, headers=HEADERS)
+        result = response.json()
+        return len(result) > 0
+    except:
+        return False
+
+
+def sign_up(email: str, password: str, invite_code: str, youtube_id: str) -> dict:
     """
-    회원가입 (초대 코드 필수)
+    회원가입 (초대 코드, 유튜브 멤버십 ID 필수)
     """
-    # 1. 초대 코드 확인
+    # 1. 유튜브 멤버십 ID 필수 확인
+    if not youtube_id or not youtube_id.strip():
+        return {"success": False, "error": "유튜브 멤버십 ID는 필수입니다."}
+
+    # 2. 유튜브 멤버십 ID 중복 확인
+    if check_youtube_id_exists(youtube_id):
+        return {"success": False, "error": "이미 등록된 유튜브 멤버십 ID입니다."}
+
+    # 3. 초대 코드 확인
     if not verify_invite_code(invite_code):
         return {"success": False, "error": "유효하지 않은 초대 코드입니다."}
 
-    # 2. 회원가입 요청
+    # 4. 회원가입 요청
     url = f"{SUPABASE_URL}/auth/v1/signup"
     data = {
         "email": email,
@@ -266,13 +293,13 @@ def render_auth_ui():
             email = st.text_input("이메일", key="signup_email")
             password = st.text_input("비밀번호", type="password", key="signup_password")
             password2 = st.text_input("비밀번호 확인", type="password", key="signup_password2")
-            youtube_id = st.text_input("유튜브 멤버십 ID", key="signup_youtube", help="유튜브 채널에서 사용하는 멤버십 ID")
+            youtube_id = st.text_input("유튜브 멤버십 ID *", key="signup_youtube", help="유튜브 채널에서 사용하는 멤버십 ID (필수, 중복 불가)")
             invite_code = st.text_input("초대 코드", key="signup_invite")
             submit = st.form_submit_button("회원가입", use_container_width=True)
 
             if submit:
-                if not email or not password or not invite_code:
-                    st.error("이메일, 비밀번호, 초대 코드는 필수입니다.")
+                if not email or not password or not invite_code or not youtube_id:
+                    st.error("모든 필드를 입력해주세요.")
                 elif password != password2:
                     st.error("비밀번호가 일치하지 않습니다.")
                 elif len(password) < 6:
