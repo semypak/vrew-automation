@@ -17,6 +17,11 @@ st.markdown("""
 <style>
     .main-header { font-size: 2.2rem; font-weight: bold; color: #1E88E5; text-align: center; margin-bottom: 0.5rem; }
     .sub-header { text-align: center; color: #666; margin-bottom: 1.5rem; font-size: 1rem; }
+    /* GitHub 아이콘 숨기기 */
+    .stToolbar { display: none !important; }
+    header[data-testid="stHeader"] { display: none !important; }
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
