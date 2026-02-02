@@ -22,6 +22,13 @@ st.markdown("""
     header[data-testid="stHeader"] { display: none !important; }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
+    /* 우측 하단 플로팅 버튼 숨기기 */
+    [data-testid="stStatusWidget"] { display: none !important; }
+    .stDeployButton { display: none !important; }
+    iframe { display: none !important; }
+    div[data-testid="stDecoration"] { display: none !important; }
+    .viewerBadge_container__r5tak { display: none !important; }
+    .styles_viewerBadge__CvC9N { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
