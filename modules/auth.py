@@ -87,7 +87,8 @@ def sign_up(email: str, password: str, invite_code: str, youtube_id: str, name: 
             return {
                 "success": True,
                 "user": result["user"],
-                "message": "회원가입 성공! 이메일을 확인해주세요."
+                "access_token": result.get("access_token"),
+                "message": "회원가입 성공!"
             }
         else:
             # 더 자세한 에러 메시지
@@ -312,6 +313,21 @@ def render_auth_ui():
                 else:
                     result = sign_up(email, password, invite_code, youtube_id, name, phone)
                     if result["success"]:
-                        st.success(result["message"])
+                        # 회원가입 성공 시 자동 로그인
+                        if result.get("access_token"):
+                            st.session_state["access_token"] = result["access_token"]
+                            st.session_state["user"] = result["user"]
+                            st.success(result["message"])
+                            st.rerun()
+                        else:
+                            # access_token이 없으면 수동 로그인 시도
+                            login_result = sign_in(email, password)
+                            if login_result["success"]:
+                                st.session_state["access_token"] = login_result["access_token"]
+                                st.session_state["user"] = login_result["user"]
+                                st.success("회원가입 성공!")
+                                st.rerun()
+                            else:
+                                st.success(result["message"] + " 로그인해주세요.")
                     else:
                         st.error(result["error"])
