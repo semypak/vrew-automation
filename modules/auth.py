@@ -82,7 +82,8 @@ def sign_up(email: str, password: str, invite_code: str, youtube_id: str, name: 
 
             # 프로필 정보 저장 (이름, 전화번호, 유튜브 ID)
             user_id = result["user"]["id"]
-            update_user_profile(user_id, name, phone, youtube_id)
+            access_token = result.get("access_token")
+            update_user_profile(user_id, name, phone, youtube_id, access_token)
 
             return {
                 "success": True,
@@ -100,7 +101,7 @@ def sign_up(email: str, password: str, invite_code: str, youtube_id: str, name: 
         return {"success": False, "error": str(e)}
 
 
-def update_user_profile(user_id: str, name: str, phone: str, youtube_id: str):
+def update_user_profile(user_id: str, name: str, phone: str, youtube_id: str, access_token: str = None):
     """사용자 프로필 정보 업데이트 (이름, 전화번호, 유튜브 ID)"""
     url = f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}"
     data = {
@@ -110,7 +111,12 @@ def update_user_profile(user_id: str, name: str, phone: str, youtube_id: str):
     }
 
     try:
-        requests.patch(url, json=data, headers=HEADERS)
+        # 인증 헤더 사용 (RLS 우회)
+        if access_token:
+            headers = get_auth_headers(access_token)
+        else:
+            headers = HEADERS
+        requests.patch(url, json=data, headers=headers)
     except:
         pass
 
