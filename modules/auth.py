@@ -47,7 +47,7 @@ def check_youtube_id_exists(youtube_id: str) -> bool:
         return False
 
 
-def sign_up(email: str, password: str, invite_code: str, youtube_id: str) -> dict:
+def sign_up(email: str, password: str, invite_code: str, youtube_id: str, name: str = "", phone: str = "") -> dict:
     """
     회원가입 (초대 코드, 유튜브 멤버십 ID 필수)
     """
@@ -80,10 +80,9 @@ def sign_up(email: str, password: str, invite_code: str, youtube_id: str) -> dic
             # 초대 코드 사용 횟수 증가
             increment_invite_code_usage(invite_code)
 
-            # 유튜브 멤버십 ID 저장
-            if youtube_id:
-                user_id = result["user"]["id"]
-                update_youtube_id(user_id, youtube_id)
+            # 프로필 정보 저장 (이름, 전화번호, 유튜브 ID)
+            user_id = result["user"]["id"]
+            update_user_profile(user_id, name, phone, youtube_id)
 
             return {
                 "success": True,
@@ -100,10 +99,14 @@ def sign_up(email: str, password: str, invite_code: str, youtube_id: str) -> dic
         return {"success": False, "error": str(e)}
 
 
-def update_youtube_id(user_id: str, youtube_id: str):
-    """유튜브 멤버십 ID 업데이트"""
+def update_user_profile(user_id: str, name: str, phone: str, youtube_id: str):
+    """사용자 프로필 정보 업데이트 (이름, 전화번호, 유튜브 ID)"""
     url = f"{SUPABASE_URL}/rest/v1/profiles?id=eq.{user_id}"
-    data = {"youtube_membership_id": youtube_id}
+    data = {
+        "name": name,
+        "phone": phone,
+        "youtube_membership_id": youtube_id
+    }
 
     try:
         requests.patch(url, json=data, headers=HEADERS)
@@ -290,22 +293,24 @@ def render_auth_ui():
 
     with tab2:
         with st.form("signup_form"):
-            email = st.text_input("이메일", key="signup_email")
-            password = st.text_input("비밀번호", type="password", key="signup_password")
-            password2 = st.text_input("비밀번호 확인", type="password", key="signup_password2")
+            name = st.text_input("이름 *", key="signup_name")
+            phone = st.text_input("전화번호 *", key="signup_phone", help="예: 010-1234-5678")
+            email = st.text_input("이메일 *", key="signup_email")
+            password = st.text_input("비밀번호 *", type="password", key="signup_password")
+            password2 = st.text_input("비밀번호 확인 *", type="password", key="signup_password2")
             youtube_id = st.text_input("유튜브 멤버십 ID *", key="signup_youtube", help="유튜브 채널에서 사용하는 멤버십 ID (필수, 중복 불가)")
-            invite_code = st.text_input("초대 코드", key="signup_invite")
+            invite_code = st.text_input("초대 코드 *", key="signup_invite")
             submit = st.form_submit_button("회원가입", use_container_width=True)
 
             if submit:
-                if not email or not password or not invite_code or not youtube_id:
+                if not name or not phone or not email or not password or not invite_code or not youtube_id:
                     st.error("모든 필드를 입력해주세요.")
                 elif password != password2:
                     st.error("비밀번호가 일치하지 않습니다.")
                 elif len(password) < 6:
                     st.error("비밀번호는 6자 이상이어야 합니다.")
                 else:
-                    result = sign_up(email, password, invite_code, youtube_id)
+                    result = sign_up(email, password, invite_code, youtube_id, name, phone)
                     if result["success"]:
                         st.success(result["message"])
                     else:
