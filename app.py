@@ -28,14 +28,10 @@ st.markdown("""
     div[data-testid="stDecoration"] { display: none !important; }
     .viewerBadge_container__r5tak { display: none !important; }
     .styles_viewerBadge__CvC9N { display: none !important; }
-    /* 외부 위젯 숨기기 */
-    div[style*="position: fixed"][style*="bottom"] { display: none !important; }
-    div[style*="position:fixed"][style*="bottom"] { display: none !important; }
+    /* 외부 위젯 숨기기 (Chess, Beehiiv 등) */
     #credential_picker_container { display: none !important; }
     .g_id_signin { display: none !important; }
     div[id^="gsi_"] { display: none !important; }
-    div[class*="__container"] { position: static !important; }
-    body > div:last-child { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
