@@ -1063,12 +1063,6 @@ def main():
                     new_credits = current_credits - 1
                     st.session_state["credits"] = new_credits
 
-                    # 크레딧 0회 시 자동 로그아웃
-                    if new_credits <= 0:
-                        st.warning("🎫 크레딧이 모두 소진되었습니다. 로그아웃됩니다.")
-                        sign_out()
-                        st.rerun()
-
                     with st.spinner("Vrew 파일 생성 중..."):
                         try:
                             from modules.vrew_creator import create_vrew_project
@@ -1153,6 +1147,12 @@ def main():
                             
                             st.session_state.generated_vrew_files = generated_files
                             st.success(f"✅ {len(generated_files)}개 Vrew 파일 생성 완료!")
+
+                            # 크레딧 0회 시 메시지 표시 (파일 생성 완료 후)
+                            if new_credits <= 0:
+                                st.session_state["logout_after_download"] = True
+                                st.warning("🎫 크레딧이 모두 소진되었습니다. 파일 다운로드 후 로그아웃됩니다.")
+
                             st.rerun()
                         
                         except Exception as e:
@@ -1185,6 +1185,10 @@ def main():
 
                 # 작업 완료 & 파일 정리 버튼
                 st.markdown("---")
+                # 크레딧 소진 시 로그아웃 예정 알림
+                if st.session_state.get("logout_after_download"):
+                    st.warning("⚠️ 크레딧이 모두 소진되었습니다. 파일 다운로드 후 아래 버튼을 누르면 로그아웃됩니다.")
+
                 if st.button("🗑️ 작업 완료 & 파일 정리", type="secondary", use_container_width=True):
                     # outputs/images 폴더 삭제
                     images_dir = os.path.join(os.path.dirname(__file__), "outputs", "images")
@@ -1196,11 +1200,17 @@ def main():
                         if os.path.exists(file_info['path']):
                             os.remove(file_info['path'])
 
+                    # 크레딧 소진 시 로그아웃
+                    should_logout = st.session_state.get("logout_after_download", False)
+
                     # 세션 초기화
                     for key in list(st.session_state.keys()):
                         del st.session_state[key]
 
-                    st.success("✅ 파일 정리 완료! 처음으로 돌아갑니다.")
+                    if should_logout:
+                        st.success("✅ 파일 정리 완료! 크레딧 소진으로 로그아웃됩니다.")
+                    else:
+                        st.success("✅ 파일 정리 완료! 처음으로 돌아갑니다.")
                     st.rerun()
 
                 st.caption("⚠️ 다운로드 완료 후 눌러주세요. 업로드한 이미지와 생성된 파일이 삭제됩니다.")
