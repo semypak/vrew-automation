@@ -377,8 +377,8 @@ def main():
     credits = get_user_credits(access_token, user_id) if user_id else 0
     st.session_state["credits"] = credits
 
-    # 크레딧 0이면 자동 로그아웃
-    if credits <= 0:
+    # 크레딧 0이면 자동 로그아웃 (단, 다운로드 대기 중이면 제외)
+    if credits <= 0 and not st.session_state.get("logout_after_download"):
         st.error("🎫 크레딧이 없습니다. 자동 로그아웃됩니다.")
         sign_out()
         st.rerun()
