@@ -403,15 +403,22 @@ def main():
         if os.path.exists(outputs_dir):
             shutil.rmtree(outputs_dir, ignore_errors=True)
 
+        # 크레딧 소진 시 로그아웃
+        should_logout = st.session_state.get("logout_after_download", False)
+
         # uploader_key 증가 (file_uploader 리셋용)
         new_uploader_key = st.session_state.get('uploader_key', 0) + 1
-        current_token = st.session_state.get('access_token')
-        current_user = st.session_state.get('user')
 
-        # 세션 초기화 (인증 정보 유지)
-        for key in list(st.session_state.keys()):
-            if key not in ['access_token', 'user']:
+        # 세션 초기화
+        if should_logout:
+            # 크레딧 소진 - 완전 로그아웃
+            for key in list(st.session_state.keys()):
                 del st.session_state[key]
+        else:
+            # 인증 정보 유지
+            for key in list(st.session_state.keys()):
+                if key not in ['access_token', 'user', 'credits']:
+                    del st.session_state[key]
 
         # uploader_key 재설정
         st.session_state.uploader_key = new_uploader_key
@@ -1195,61 +1202,32 @@ def main():
                                 key=f"download_{file_info['filename']}"
                             )
 
-                # 전체 다운로드 버튼 (여러 파일일 경우)
-                if len(st.session_state.generated_vrew_files) > 1:
-                    st.markdown("---")
-                    # 전체 파일을 하나의 ZIP으로 묶기
-                    all_files_zip = io.BytesIO()
-                    with zipfile.ZipFile(all_files_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
-                        for file_info in st.session_state.generated_vrew_files:
-                            if os.path.exists(file_info['path']):
-                                zf.write(file_info['path'], file_info['filename'])
-                    all_files_zip.seek(0)
-
-                    script_name = st.session_state.get('script_filename', 'vrew')
-                    all_zip_name = f"{script_name}_전체.zip"
-
-                    st.download_button(
-                        "📦 전체 다운로드",
-                        data=all_files_zip,
-                        file_name=all_zip_name,
-                        mime="application/zip",
-                        use_container_width=True,
-                        type="primary",
-                        key="download_all_files"
-                    )
-
-                # 작업 완료 & 파일 정리 버튼
+                # 전체 다운로드 버튼
                 st.markdown("---")
-                # 크레딧 소진 시 로그아웃 예정 알림
-                if st.session_state.get("logout_after_download"):
-                    st.warning("⚠️ 크레딧이 모두 소진되었습니다. 파일 다운로드 후 아래 버튼을 누르면 로그아웃됩니다.")
-
-                if st.button("🗑️ 작업 완료 & 파일 정리", type="secondary", use_container_width=True):
-                    # outputs/images 폴더 삭제
-                    images_dir = os.path.join(os.path.dirname(__file__), "outputs", "images")
-                    if os.path.exists(images_dir):
-                        shutil.rmtree(images_dir)
-
-                    # 생성된 vrew 파일 삭제
+                # 전체 파일을 하나의 ZIP으로 묶기
+                all_files_zip = io.BytesIO()
+                with zipfile.ZipFile(all_files_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
                     for file_info in st.session_state.generated_vrew_files:
                         if os.path.exists(file_info['path']):
-                            os.remove(file_info['path'])
+                            zf.write(file_info['path'], file_info['filename'])
+                all_files_zip.seek(0)
 
-                    # 크레딧 소진 시 로그아웃
-                    should_logout = st.session_state.get("logout_after_download", False)
+                script_name = st.session_state.get('script_filename', 'vrew')
+                all_zip_name = f"{script_name}_전체.zip"
 
-                    # 세션 초기화
-                    for key in list(st.session_state.keys()):
-                        del st.session_state[key]
+                st.download_button(
+                    "📦 전체 다운로드",
+                    data=all_files_zip,
+                    file_name=all_zip_name,
+                    mime="application/zip",
+                    use_container_width=True,
+                    type="primary",
+                    key="download_all_files"
+                )
 
-                    if should_logout:
-                        st.success("✅ 파일 정리 완료! 크레딧 소진으로 로그아웃됩니다.")
-                    else:
-                        st.success("✅ 파일 정리 완료! 처음으로 돌아갑니다.")
-                    st.rerun()
-
-                st.caption("⚠️ 다운로드 완료 후 눌러주세요. 업로드한 이미지와 생성된 파일이 삭제됩니다.")
+                # 크레딧 소진 시 알림
+                if st.session_state.get("logout_after_download"):
+                    st.warning("⚠️ 크레딧이 모두 소진되었습니다. 다운로드 후 '자동화 재시작' 버튼을 누르면 로그아웃됩니다.")
 
         with col2:
             st.markdown("**💡 다음 단계**")
