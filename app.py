@@ -1204,26 +1204,39 @@ def main():
 
                 # 전체 다운로드 버튼
                 st.markdown("---")
-                # 전체 파일을 하나의 ZIP으로 묶기
-                all_files_zip = io.BytesIO()
-                with zipfile.ZipFile(all_files_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
-                    for file_info in st.session_state.generated_vrew_files:
-                        if os.path.exists(file_info['path']):
-                            zf.write(file_info['path'], file_info['filename'])
-                all_files_zip.seek(0)
-
                 script_name = st.session_state.get('script_filename', 'vrew')
-                all_zip_name = f"{script_name}_전체.zip"
 
-                st.download_button(
-                    "📦 전체 다운로드",
-                    data=all_files_zip,
-                    file_name=all_zip_name,
-                    mime="application/zip",
-                    use_container_width=True,
-                    type="primary",
-                    key="download_all_files"
-                )
+                if len(st.session_state.generated_vrew_files) == 1:
+                    # 파일 1개: 직접 다운로드 (.vrew)
+                    file_info = st.session_state.generated_vrew_files[0]
+                    with open(file_info['path'], 'rb') as f:
+                        st.download_button(
+                            "📥 다운로드",
+                            data=f,
+                            file_name=file_info['filename'],
+                            mime="application/zip",
+                            use_container_width=True,
+                            type="primary",
+                            key="download_single_file"
+                        )
+                else:
+                    # 파일 여러 개: ZIP으로 묶기 (브라우저 제한)
+                    all_files_zip = io.BytesIO()
+                    with zipfile.ZipFile(all_files_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+                        for file_info in st.session_state.generated_vrew_files:
+                            if os.path.exists(file_info['path']):
+                                zf.write(file_info['path'], file_info['filename'])
+                    all_files_zip.seek(0)
+
+                    st.download_button(
+                        "📦 전체 다운로드 (ZIP)",
+                        data=all_files_zip,
+                        file_name=f"{script_name}_전체.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                        type="primary",
+                        key="download_all_files"
+                    )
 
                 # 크레딧 소진 시 알림
                 if st.session_state.get("logout_after_download"):
