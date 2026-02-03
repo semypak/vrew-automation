@@ -151,7 +151,35 @@ def get_silence_duration(word):
         return 0.2  # 일반 단어
 
 
-def create_vrew_project(template_path, images, captions, output_path, tts_voice="va29"):
+def get_video_metadata(video_path):
+    """영상 메타데이터 추출 (duration, width, height, frameRate, codec)"""
+    try:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return None
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        duration = frame_count / fps if fps > 0 else 5
+
+        return {
+            "duration": round(duration, 2),
+            "width": width,
+            "height": height,
+            "frameRate": round(fps, 2),
+            "codec": "h264",
+            "rotation": 0
+        }
+    except Exception as e:
+        print(f"[WARN] 영상 메타데이터 추출 실패: {video_path} - {e}")
+        return None
+
+
+def create_vrew_project(template_path, images, captions, output_path, tts_voice="va29", intro_video=None):
     """
     Vrew 프로젝트 생성 - AI 목소리 모드 + ttsClipInfosMap 포함
 
@@ -161,6 +189,7 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
         captions: 자막 텍스트 리스트 (각 자막은 30자 이내 권장)
         output_path: 출력 .vrew 파일 경로
         tts_voice: TTS 음성 ID (기본: va29 = 송세아)
+        intro_video: 인트로 영상 파일 경로 (선택)
     """
 
     # 자막 텍스트 정리: 이스케이프 문자 제거
@@ -201,13 +230,124 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
     
     # ttsClipInfosMap 초기화
     tts_clip_infos_map = {}
-    
+
+    # 인트로 비디오 처리
+    intro_asset_id = None
+    intro_media_id = None
+    intro_tts_media_id = None
+    intro_duration = 0
+
+    if intro_video and os.path.exists(intro_video):
+        intro_meta = get_video_metadata(intro_video)
+        if intro_meta:
+            intro_media_id = str(uuid.uuid4())
+            intro_asset_id = str(uuid.uuid4())
+            intro_duration = intro_meta['duration']
+
+            ext = os.path.splitext(intro_video)[1].lower()
+            file_size = os.path.getsize(intro_video)
+            aspect_ratio = intro_meta['width'] / intro_meta['height'] if intro_meta['height'] > 0 else 1.777
+
+            # files에 인트로 비디오 추가
+            project['files'].append({
+                "version": 1,
+                "mediaId": intro_media_id,
+                "sourceOrigin": "USER",
+                "fileSize": file_size,
+                "name": os.path.basename(intro_video),
+                "type": "AVMedia",
+                "videoAudioMetaInfo": {
+                    "duration": intro_duration,
+                    "videoInfo": {
+                        "size": {
+                            "width": intro_meta['width'],
+                            "height": intro_meta['height'],
+                            "rotation": intro_meta.get('rotation', 0)
+                        },
+                        "frameRate": intro_meta['frameRate'],
+                        "codec": intro_meta['codec'],
+                        "colorSpace": "unknown"
+                    },
+                    "mediaContainer": "mp4"
+                },
+                "sourceFileType": "ASSET_VIDEO",
+                "fileLocation": "IN_MEMORY"
+            })
+
+            # 미디어 폴더에 복사
+            shutil.copy2(intro_video, os.path.join(media_dir, f"{intro_media_id}{ext}"))
+
+            # 인트로 asset 생성 (볼륨 1.0 - 원본 오디오 그대로)
+            project['props']['assets'][intro_asset_id] = {
+                "mediaId": intro_media_id,
+                "xPos": 0,
+                "yPos": 0,
+                "height": 1,
+                "width": 1,
+                "rotation": 0,
+                "zIndex": 0,
+                "type": "video",
+                "sourceIn": 0,
+                "volume": 1.0,
+                "originalWidthHeightRatio": aspect_ratio,
+                "isTrimmable": True,
+                "hasAlphaChannel": False,
+                "editInfo": {}
+            }
+
+            # 인트로용 더미 TTS 파일 항목 추가
+            intro_tts_media_id = generate_id()
+            project['files'].append({
+                "version": 1,
+                "mediaId": intro_tts_media_id,
+                "sourceOrigin": "VREW_RESOURCE",
+                "fileSize": 25913,
+                "name": "intro_silence.mp3",
+                "type": "AVMedia",
+                "videoAudioMetaInfo": {
+                    "duration": intro_duration,
+                    "audioInfo": {
+                        "sampleRate": 24000,
+                        "codec": "mp3",
+                        "channelCount": 1
+                    }
+                },
+                "sourceFileType": "TTS",
+                "fileLocation": "IN_MEMORY"
+            })
+
+            # ttsClipInfosMap에 인트로 TTS 정보 추가
+            tts_clip_infos_map[intro_tts_media_id] = {
+                "duration": intro_duration,
+                "text": {
+                    "raw": "",
+                    "textAspectLang": "ko-KR",
+                    "processed": ""
+                },
+                "speaker": {
+                    "gender": "female",
+                    "age": "middle",
+                    "provider": "vrew",
+                    "lang": "ko-KR",
+                    "name": tts_voice,
+                    "speakerId": tts_voice,
+                    "versions": ["v2"]
+                },
+                "volume": 0,
+                "speed": 0,
+                "pitch": 0,
+                "version": "v2"
+            }
+
+            print(f"[OK] 인트로 비디오 추가: {os.path.basename(intro_video)} ({intro_meta['width']}x{intro_meta['height']}, {intro_duration:.1f}초)")
+        else:
+            print(f"[WARN] 인트로 비디오 메타데이터 추출 실패: {intro_video}")
+
     # 미디어 파일 및 asset 추가 (이미지/영상)
     image_to_media = {}
-    image_to_asset = {}  # 이미지만 asset 생성
     video_info_map = {}  # 영상 정보 저장 (duration 등)
     asset_effect_counter = {}
-    asset_zindex_counter = 0  # 각 asset에 고유한 zIndex 부여
+    asset_zindex_counter = 1 if intro_asset_id else 0  # 인트로가 있으면 1부터 시작
 
     for i, img_path in enumerate(images):
         if not os.path.exists(img_path):
@@ -275,8 +415,6 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                 }
             else:
                 # 이미지 파일
-                asset_id = str(uuid.uuid4())
-
                 project['files'].append({
                     "version": 1,
                     "mediaId": media_id,
@@ -291,30 +429,13 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                 # 이미지 복사
                 shutil.copy2(img_path, os.path.join(media_dir, media_name))
 
-                # 이미지 asset 생성
-                project['props']['assets'][asset_id] = {
-                    "mediaId": media_id,
-                    "xPos": 0,
-                    "yPos": 0,
-                    "height": 1,
-                    "width": 1,
-                    "rotation": 0,
-                    "zIndex": asset_zindex_counter,
-                    "type": "image",
-                    "originalWidthHeightRatio": 1.7777777777777777,
-                    "importType": "user_asset_panel",
-                    "kenburnsAnimationInfo": get_kenburns_effect(0),
-                    "editInfo": {},
-                    "stats": {"fillType": "cut", "fillMenu": "floating", "rearrangeCount": 0}
-                }
-                asset_zindex_counter += 1
-                image_to_asset[img_path] = asset_id
-
             image_to_media[img_path] = media_id
             asset_effect_counter[img_path] = 0
-    
-    # 클립 생성
+
+    # 클립 생성 (연속된 같은 이미지는 같은 asset 공유 - Ken Burns 효과 개선)
     new_clips = []
+    prev_media_path = None
+    current_asset_id = None
 
     for i, (img_path, caption) in enumerate(zip(images, captions)):
         if img_path not in image_to_media:
@@ -391,12 +512,34 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
 
         else:
             # ===== 이미지 클립 (TTS 포함) =====
-            asset_id = image_to_asset[img_path]
+            # 연속된 같은 이미지는 같은 asset 공유 (Ken Burns 효과가 자연스럽게 이어지도록)
+            if img_path == prev_media_path and current_asset_id:
+                asset_id = current_asset_id
+            else:
+                # 새로운 이미지 → 새로운 asset 생성
+                asset_id = str(uuid.uuid4())
+                current_asset_id = asset_id
+                prev_media_path = img_path
 
-            # Ken Burns 효과 업데이트
-            effect_idx = asset_effect_counter[img_path]
-            project['props']['assets'][asset_id]['kenburnsAnimationInfo'] = get_kenburns_effect(effect_idx)
-            asset_effect_counter[img_path] += 1
+                # Ken Burns 효과 적용
+                effect_idx = asset_effect_counter.get(img_path, 0)
+                project['props']['assets'][asset_id] = {
+                    "mediaId": media_id,
+                    "xPos": 0,
+                    "yPos": 0,
+                    "height": 1,
+                    "width": 1,
+                    "rotation": 0,
+                    "zIndex": asset_zindex_counter,
+                    "type": "image",
+                    "originalWidthHeightRatio": 1.7777777777777777,
+                    "importType": "user_asset_panel",
+                    "kenburnsAnimationInfo": get_kenburns_effect(effect_idx),
+                    "editInfo": {},
+                    "stats": {"fillType": "cut", "fillMenu": "floating", "rearrangeCount": 0}
+                }
+                asset_zindex_counter += 1
+                asset_effect_counter[img_path] = effect_idx + 1
 
             # TTS 생성
             tts_media_id = generate_id()
@@ -532,7 +675,69 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                 "audioIds": []
             }
             new_clips.append(clip)
-    
+
+    # 인트로 클립 추가 (맨 앞에)
+    if intro_asset_id and intro_tts_media_id and intro_duration > 0:
+        intro_words = [
+            {
+                "id": generate_id(),
+                "text": "",
+                "startTime": 0,
+                "duration": round(intro_duration, 2),
+                "aligned": False,
+                "type": 1,  # 묵음 (영상 오디오만 재생)
+                "originalDuration": round(intro_duration, 2),
+                "originalStartTime": 0,
+                "truncatedWords": [],
+                "autoControl": False,
+                "mediaId": intro_tts_media_id,
+                "audioIds": [],
+                "assetIds": [],
+                "playbackRate": 1
+            },
+            {
+                "id": generate_id(),
+                "text": "",
+                "startTime": round(intro_duration, 2),
+                "duration": 0,
+                "aligned": False,
+                "type": 2,  # 끝 마커
+                "originalDuration": 0,
+                "originalStartTime": round(intro_duration, 2),
+                "truncatedWords": [],
+                "autoControl": False,
+                "mediaId": intro_tts_media_id,
+                "audioIds": [],
+                "assetIds": [],
+                "playbackRate": 1
+            }
+        ]
+
+        intro_clip = {
+            "id": generate_id(),
+            "words": intro_words,
+            "captionMode": "MANUAL",
+            "captions": [
+                {"text": [{"insert": "\n"}]},
+                {"text": [{"insert": "\n"}]}
+            ],
+            "assetIds": [intro_asset_id],
+            "dirty": {
+                "blankDeleted": False,
+                "caption": False,
+                "video": False
+            },
+            "translationModified": {
+                "result": False,
+                "source": False
+            },
+            "audioIds": []
+        }
+
+        # 맨 앞에 추가
+        new_clips.insert(0, intro_clip)
+        print(f"[OK] 인트로 클립 추가 (길이: {intro_duration:.1f}초)")
+
     # scenes 업데이트
     project['transcript']['scenes'] = [{
         "id": generate_id(),

@@ -9,6 +9,8 @@ import os
 import re
 import time
 import shutil
+import zipfile
+import io
 from datetime import datetime
 
 st.set_page_config(page_title="엔라이트랩 Vrew 자동화", page_icon="🎬", layout="wide")
@@ -1177,11 +1179,11 @@ def main():
                 
                 for file_info in st.session_state.generated_vrew_files:
                     col_info, col_btn = st.columns([3, 1])
-                    
+
                     with col_info:
                         st.caption(f"**{file_info['filename']}**")
                         st.caption(f"({file_info['range']})")
-                    
+
                     with col_btn:
                         with open(file_info['path'], 'rb') as f:
                             st.download_button(
@@ -1192,6 +1194,30 @@ def main():
                                 use_container_width=True,
                                 key=f"download_{file_info['filename']}"
                             )
+
+                # 전체 다운로드 버튼 (여러 파일일 경우)
+                if len(st.session_state.generated_vrew_files) > 1:
+                    st.markdown("---")
+                    # 전체 파일을 하나의 ZIP으로 묶기
+                    all_files_zip = io.BytesIO()
+                    with zipfile.ZipFile(all_files_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+                        for file_info in st.session_state.generated_vrew_files:
+                            if os.path.exists(file_info['path']):
+                                zf.write(file_info['path'], file_info['filename'])
+                    all_files_zip.seek(0)
+
+                    script_name = st.session_state.get('script_filename', 'vrew')
+                    all_zip_name = f"{script_name}_전체.zip"
+
+                    st.download_button(
+                        "📦 전체 다운로드",
+                        data=all_files_zip,
+                        file_name=all_zip_name,
+                        mime="application/zip",
+                        use_container_width=True,
+                        type="primary",
+                        key="download_all_files"
+                    )
 
                 # 작업 완료 & 파일 정리 버튼
                 st.markdown("---")
