@@ -1183,27 +1183,33 @@ def main():
             if 'generated_vrew_files' in st.session_state and st.session_state.generated_vrew_files:
                 st.markdown("---")
                 st.markdown("### 📥 생성된 파일")
-                
-                for file_info in st.session_state.generated_vrew_files:
-                    col_info, col_btn = st.columns([3, 1])
 
-                    with col_info:
-                        st.caption(f"**{file_info['filename']}**")
-                        st.caption(f"({file_info['range']})")
+                # 파일이 여러 개일 때만 개별 다운로드 버튼 표시
+                if len(st.session_state.generated_vrew_files) > 1:
+                    for file_info in st.session_state.generated_vrew_files:
+                        col_info, col_btn = st.columns([3, 1])
 
-                    with col_btn:
-                        with open(file_info['path'], 'rb') as f:
-                            st.download_button(
-                                "📥",
-                                data=f,
-                                file_name=file_info['filename'],
-                                mime="application/zip",
-                                use_container_width=True,
-                                key=f"download_{file_info['filename']}"
-                            )
+                        with col_info:
+                            st.caption(f"**{file_info['filename']}**")
+                            st.caption(f"({file_info['range']})")
 
-                # 전체 다운로드 버튼
-                st.markdown("---")
+                        with col_btn:
+                            with open(file_info['path'], 'rb') as f:
+                                st.download_button(
+                                    "📥",
+                                    data=f,
+                                    file_name=file_info['filename'],
+                                    mime="application/zip",
+                                    use_container_width=True,
+                                    key=f"download_{file_info['filename']}"
+                                )
+                    st.markdown("---")
+                else:
+                    # 파일 1개: 파일명만 표시
+                    file_info = st.session_state.generated_vrew_files[0]
+                    st.caption(f"**{file_info['filename']}** ({file_info['range']})")
+
+                # 다운로드 버튼
                 script_name = st.session_state.get('script_filename', 'vrew')
 
                 if len(st.session_state.generated_vrew_files) == 1:
