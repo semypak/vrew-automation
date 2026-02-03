@@ -1069,7 +1069,7 @@ def main():
                 if button_disabled:
                     st.error("🎫 크레딧이 부족합니다. 관리자에게 문의하세요.")
 
-                if st.button("🎬 모든 Vrew 파일 생성", type="primary", use_container_width=True, disabled=button_disabled):
+                if st.button("🎬 모든 Vrew 파일 생성 (크레딧 차감)", type="primary", use_container_width=True, disabled=button_disabled):
                     # 크레딧 차감
                     user = get_current_user()
                     user_id = user.get("id") if user else None
