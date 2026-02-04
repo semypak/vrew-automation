@@ -449,7 +449,7 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("### 📄 대본 업로드")
+            st.markdown("### 📄 1.대본 업로드")
             script_file = st.file_uploader("대본 텍스트 파일 (.txt)", type=['txt'], key=f"script_uploader_{st.session_state.uploader_key}")
             
             if script_file:
@@ -462,7 +462,7 @@ def main():
                     st.text(script_text[:500] + "..." if len(script_text) > 500 else script_text)
         
         with col2:
-            st.markdown("### 📊 이미지 정보 업로드")
+            st.markdown("### 📊 2.이미지 정보 업로드")
             excel_file = st.file_uploader("엑셀/CSV 파일 (A열: 1-1 형식, B열: 시작문장, C열: 프롬프트)", type=['xlsx', 'xls', 'csv'], key=f"excel_uploader_{st.session_state.uploader_key}")
 
             if excel_file:
@@ -493,7 +493,7 @@ def main():
         
         if st.session_state.get('script_text') and st.session_state.get('excel_df') is not None:
             
-            if st.button("🔄 대본 분할 & 프롬프트 추출", type="primary", use_container_width=True):
+            if st.button("🔄 3.대본분할 & 프롬프트 추출", type="primary", use_container_width=True):
                 with st.spinner("처리 중..."):
                     markers = parse_excel(st.session_state.excel_df)
                     scenes = split_script_by_markers(st.session_state.script_text, markers)
@@ -544,7 +544,7 @@ def main():
                 
                 with col1:
                     st.download_button(
-                        "📥 이미지 프롬프트 다운로드 (txt)",
+                        "📥 4.이미지 프롬프트 다운로드 (txt)",
                         data=prompts_text,
                         file_name="prompts.txt",
                         mime="text/plain",
@@ -588,10 +588,11 @@ def main():
         st.markdown("---")
         st.markdown("---")
         st.info(f"**총 {len(scenes)}개 씬**에 대한 이미지를 업로드하세요")
-        
+
+        st.markdown('<h3 style="color: #FF0000;">이미지 업로드(jpg,png)</h3>', unsafe_allow_html=True)
         uploaded_files = st.file_uploader(
-            "이미지/영상 업로드 (001.jpg, 002.mp4 등)",
-            type=['png', 'jpg', 'jpeg', 'mp4'],
+            "",
+            type=['png', 'jpg', 'jpeg'],
             accept_multiple_files=True,
             key=f"image_uploader_{st.session_state.uploader_key}"
         )
@@ -1006,7 +1007,7 @@ def main():
             st.markdown(f"**📋 요약:** 총 {total_shots}개 씬 | {len(clips)}개 클립")
 
             st.markdown("---")
-            st.markdown("**씬 단위 분할 설정**")
+            st.markdown('<h3 style="color: #FF0000;">씬 단위 분할 설정을 선택하세요</h3>', unsafe_allow_html=True)
 
             # 씬 분할 선택 버튼
             col_all, col_5, col_10, col_20 = st.columns(4)
