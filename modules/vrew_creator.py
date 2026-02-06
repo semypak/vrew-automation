@@ -17,6 +17,7 @@ import random
 import string
 import re
 import cv2
+import numpy as np
 
 
 def get_video_info(video_path):
@@ -151,6 +152,39 @@ def get_silence_duration(word):
         return 0.2  # 일반 단어
 
 
+def apply_noise_overlay(image_path, output_path, alpha=0.015):
+    """
+    이미지에 미세한 랜덤 노이즈를 합성 (기술적 해자)
+    - 투명도 1~2%로 사람 눈에 거의 보이지 않음
+    - 랜덤 시드로 매번 다른 노이즈 패턴 생성
+    """
+    img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+    if img is None:
+        shutil.copy2(image_path, output_path)
+        return output_path
+
+    h, w = img.shape[:2]
+
+    # 매번 다른 랜덤 시드
+    seed = int.from_bytes(os.urandom(4), byteorder='big')
+    rng = np.random.RandomState(seed)
+
+    # 랜덤 노이즈 생성 (0~255)
+    noise = rng.randint(0, 256, (h, w, 3), dtype=np.uint8)
+
+    # 원본 이미지 (알파 채널 분리)
+    if img.shape[2] == 4:
+        bgr = img[:, :, :3]
+        alpha_channel = img[:, :, 3]
+        blended = cv2.addWeighted(bgr, 1.0 - alpha, noise, alpha, 0)
+        result = np.dstack([blended, alpha_channel])
+    else:
+        result = cv2.addWeighted(img, 1.0 - alpha, noise, alpha, 0)
+
+    cv2.imwrite(output_path, result)
+    return output_path
+
+
 def get_video_metadata(video_path):
     """영상 메타데이터 추출 (duration, width, height, frameRate, codec)"""
     try:
@@ -179,7 +213,7 @@ def get_video_metadata(video_path):
         return None
 
 
-def create_vrew_project(template_path, images, captions, output_path, tts_voice="va29", intro_video=None):
+def create_vrew_project(template_path, images, captions, output_path, tts_voice="va29", intro_video=None, overlay_logo=None):
     """
     Vrew 프로젝트 생성 - AI 목소리 모드 + ttsClipInfosMap 포함
 
@@ -190,6 +224,7 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
         output_path: 출력 .vrew 파일 경로
         tts_voice: TTS 음성 ID (기본: va29 = 송세아)
         intro_video: 인트로 영상 파일 경로 (선택)
+        overlay_logo: 오버레이 로고 PNG 파일 경로 (선택, 1920x1080 투명 PNG)
     """
 
     # 자막 텍스트 정리: 이스케이프 문자 제거
@@ -342,6 +377,69 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
             print(f"[OK] 인트로 비디오 추가: {os.path.basename(intro_video)} ({intro_meta['width']}x{intro_meta['height']}, {intro_duration:.1f}초)")
         else:
             print(f"[WARN] 인트로 비디오 메타데이터 추출 실패: {intro_video}")
+
+    # === 노이즈 전처리: 모든 이미지에 미세 랜덤 노이즈 적용 ===
+    noise_dir = os.path.join(os.path.dirname(output_path), "_noise_temp")
+    os.makedirs(noise_dir, exist_ok=True)
+    processed_images = []
+    for idx, img_path in enumerate(images):
+        ext = os.path.splitext(img_path)[1].lower()
+        if ext in ['.png', '.jpg', '.jpeg'] and os.path.exists(img_path):
+            noise_out = os.path.join(noise_dir, f"n_{idx}{ext}")
+            apply_noise_overlay(img_path, noise_out)
+            processed_images.append(noise_out)
+        else:
+            processed_images.append(img_path)
+    images = processed_images
+    print(f"[OK] 노이즈 전처리 완료: {len(processed_images)}개 이미지")
+
+    # === 오버레이 로고 처리 ===
+    overlay_asset_id = None
+    overlay_media_id = None
+
+    if overlay_logo and os.path.exists(overlay_logo):
+        # 로고에도 노이즈 적용
+        logo_noise_path = os.path.join(noise_dir, "logo_noise.png")
+        apply_noise_overlay(overlay_logo, logo_noise_path)
+
+        overlay_media_id = str(uuid.uuid4())
+        overlay_asset_id = str(uuid.uuid4())
+
+        file_size = os.path.getsize(logo_noise_path)
+        media_name = f"{overlay_media_id}.png"
+
+        # files에 로고 추가
+        project['files'].append({
+            "version": 1,
+            "mediaId": overlay_media_id,
+            "sourceOrigin": "USER",
+            "fileSize": file_size,
+            "name": media_name,
+            "type": "Image",
+            "isTransparent": True,
+            "fileLocation": "IN_MEMORY"
+        })
+
+        # 미디어 폴더에 복사
+        shutil.copy2(logo_noise_path, os.path.join(media_dir, media_name))
+
+        # 로고 asset 생성 (Ken Burns 효과 없음, 화면 꽉 참)
+        project['props']['assets'][overlay_asset_id] = {
+            "mediaId": overlay_media_id,
+            "xPos": 0,
+            "yPos": 0,
+            "height": 1,
+            "width": 1,
+            "rotation": 0,
+            "zIndex": 9999,
+            "type": "image",
+            "originalWidthHeightRatio": 1.7777777777777777,
+            "importType": "user_asset_panel",
+            "editInfo": {},
+            "stats": {"fillType": "cut", "fillMenu": "floating", "rearrangeCount": 0}
+        }
+
+        print(f"[OK] 오버레이 로고 추가: {os.path.basename(overlay_logo)} (Ken Burns 미적용)")
 
     # 미디어 파일 및 asset 추가 (이미지/영상)
     image_to_media = {}
@@ -653,7 +751,11 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                 "playbackRate": 1
             })
 
-            # 이미지 클립 생성
+            # 이미지 클립 생성 (로고 오버레이가 있으면 추가)
+            clip_asset_ids = [asset_id]
+            if overlay_asset_id:
+                clip_asset_ids.append(overlay_asset_id)
+
             clip = {
                 "id": generate_id(),
                 "words": words,
@@ -662,7 +764,7 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                     {"text": [{"insert": caption + "\n"}]},
                     {"text": [{"insert": "\n"}]}
                 ],
-                "assetIds": [asset_id],
+                "assetIds": clip_asset_ids,
                 "dirty": {
                     "blankDeleted": False,
                     "caption": False,
@@ -784,7 +886,11 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                 zf.write(file_path, arc_name)
     
     shutil.rmtree(temp_dir)
-    
+
+    # 노이즈 임시 폴더 정리
+    if os.path.exists(noise_dir):
+        shutil.rmtree(noise_dir, ignore_errors=True)
+
     print(f"[OK] Vrew 프로젝트 생성 완료: {output_path}")
     print(f"   - 클립 수: {len(new_clips)}")
     print(f"   - 이미지 수: {len(image_to_media)}")

@@ -589,6 +589,26 @@ def main():
         st.markdown("---")
         st.info(f"**총 {len(scenes)}개 씬**에 대한 이미지를 업로드하세요")
 
+        # 로고 오버레이 업로드
+        st.markdown('<h3 style="color: #FF0000;">로고 오버레이 업로드 (선택)</h3>', unsafe_allow_html=True)
+        logo_file = st.file_uploader(
+            "투명 배경 PNG (1920x1080)",
+            type=['png'],
+            accept_multiple_files=False,
+            key=f"logo_uploader_{st.session_state.uploader_key}"
+        )
+
+        if logo_file:
+            logo_dir = os.path.join(os.path.dirname(__file__), "outputs", "logo")
+            os.makedirs(logo_dir, exist_ok=True)
+            logo_path = os.path.join(logo_dir, "overlay_logo.png")
+            with open(logo_path, 'wb') as f:
+                f.write(logo_file.read())
+            st.session_state['overlay_logo_path'] = logo_path
+            st.success(f"✅ 로고 업로드 완료: {logo_file.name}")
+
+        st.markdown("---")
+
         st.markdown('<h3 style="color: #FF0000;">이미지 업로드(jpg,png)</h3>', unsafe_allow_html=True)
         uploaded_files = st.file_uploader(
             "",
@@ -1152,11 +1172,15 @@ def main():
                                 output_filename = f"{script_name}_장면{part_idx+1}.vrew"
                                 output_path = os.path.join(output_dir, output_filename)
 
+                                # 오버레이 로고 경로
+                                overlay_logo = st.session_state.get('overlay_logo_path')
+
                                 create_vrew_project(
                                     template_path=template_path,
                                     images=part_images,
                                     captions=part_captions,
-                                    output_path=output_path
+                                    output_path=output_path,
+                                    overlay_logo=overlay_logo
                                 )
 
                                 generated_files.append({
