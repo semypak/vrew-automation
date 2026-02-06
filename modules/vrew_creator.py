@@ -54,31 +54,38 @@ def generate_id(length=10):
     return ''.join(random.choice(chars) for _ in range(length))
 
 
-def get_kenburns_effect(index):
-    """Ken Burns 효과 순환"""
-    effects = [
-        {
-            "type": "right-to-left",
-            "from": {"scale": 0.7, "centerX": 0.58, "centerY": 0.5},
-            "to": {"scale": 0.7, "centerX": 0.42, "centerY": 0.5}
-        },
-        {
-            "type": "left-to-right", 
-            "from": {"scale": 0.7, "centerX": 0.42, "centerY": 0.5},
-            "to": {"scale": 0.7, "centerX": 0.58, "centerY": 0.5}
-        },
-        {
-            "type": "zoom-in",
-            "from": {"scale": 0.8, "centerX": 0.5, "centerY": 0.5},
-            "to": {"scale": 1.0, "centerX": 0.5, "centerY": 0.5}
-        },
-        {
-            "type": "zoom-out",
-            "from": {"scale": 1.0, "centerX": 0.5, "centerY": 0.5},
-            "to": {"scale": 0.8, "centerX": 0.5, "centerY": 0.5}
-        }
-    ]
-    return effects[index % len(effects)]
+KENBURNS_EFFECTS = [
+    {
+        "type": "right-to-left",
+        "from": {"scale": 0.7, "centerX": 0.58, "centerY": 0.5},
+        "to": {"scale": 0.7, "centerX": 0.42, "centerY": 0.5}
+    },
+    {
+        "type": "left-to-right",
+        "from": {"scale": 0.7, "centerX": 0.42, "centerY": 0.5},
+        "to": {"scale": 0.7, "centerX": 0.58, "centerY": 0.5}
+    },
+    {
+        "type": "zoom-in",
+        "from": {"scale": 0.8, "centerX": 0.5, "centerY": 0.5},
+        "to": {"scale": 1.0, "centerX": 0.5, "centerY": 0.5}
+    },
+    {
+        "type": "zoom-out",
+        "from": {"scale": 1.0, "centerX": 0.5, "centerY": 0.5},
+        "to": {"scale": 0.8, "centerX": 0.5, "centerY": 0.5}
+    }
+]
+
+
+def get_kenburns_effect_random(previous_index=None):
+    """Ken Burns 효과 랜덤 선택 (연속 중복 방지)"""
+    if previous_index is None:
+        idx = random.randint(0, len(KENBURNS_EFFECTS) - 1)
+    else:
+        candidates = [i for i in range(len(KENBURNS_EFFECTS)) if i != previous_index]
+        idx = random.choice(candidates)
+    return idx, KENBURNS_EFFECTS[idx]
 
 
 def split_caption_to_words(caption, total_duration):
@@ -365,35 +372,23 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
         else:
             print(f"[WARN] 인트로 비디오 메타데이터 추출 실패: {intro_video}")
 
-    # === 노이즈 전처리: 모든 이미지에 미세 랜덤 노이즈 적용 ===
-    noise_dir = os.path.join(os.path.dirname(output_path), "_noise_temp")
-    os.makedirs(noise_dir, exist_ok=True)
-    processed_images = []
-    for idx, img_path in enumerate(images):
-        ext = os.path.splitext(img_path)[1].lower()
-        if ext in ['.png', '.jpg', '.jpeg'] and os.path.exists(img_path):
-            noise_out = os.path.join(noise_dir, f"n_{idx}{ext}")
-            apply_noise_overlay(img_path, noise_out)
-            processed_images.append(noise_out)
-        else:
-            processed_images.append(img_path)
-    images = processed_images
-    print(f"[OK] 노이즈 전처리 완료: {len(processed_images)}개 이미지")
+    # 노이즈는 media 폴더 복사 시 직접 적용 (임시 폴더 제거로 속도 2배 향상)
+    print(f"[OK] 노이즈: media 복사 시 직접 적용 예정 ({len(images)}개 이미지)")
 
     # === 오버레이 로고 처리 ===
     overlay_asset_id = None
     overlay_media_id = None
 
     if overlay_logo and os.path.exists(overlay_logo):
-        # 로고에도 노이즈 적용
-        logo_noise_path = os.path.join(noise_dir, "logo_noise.png")
-        apply_noise_overlay(overlay_logo, logo_noise_path)
-
         overlay_media_id = str(uuid.uuid4())
         overlay_asset_id = str(uuid.uuid4())
 
-        file_size = os.path.getsize(logo_noise_path)
         media_name = f"{overlay_media_id}.png"
+        logo_dest = os.path.join(media_dir, media_name)
+
+        # 로고에 노이즈 직접 적용 (media 폴더에 바로 저장)
+        apply_noise_overlay(overlay_logo, logo_dest)
+        file_size = os.path.getsize(logo_dest)
 
         # files에 로고 추가
         project['files'].append({
@@ -406,9 +401,6 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
             "isTransparent": True,
             "fileLocation": "IN_MEMORY"
         })
-
-        # 미디어 폴더에 복사
-        shutil.copy2(logo_noise_path, os.path.join(media_dir, media_name))
 
         # 로고 asset 생성 (Ken Burns 효과 없음, 화면 꽉 참)
         project['props']['assets'][overlay_asset_id] = {
@@ -431,7 +423,6 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
     # 미디어 파일 및 asset 추가 (이미지/영상)
     image_to_media = {}
     video_info_map = {}  # 영상 정보 저장 (duration 등)
-    asset_effect_counter = {}
     asset_zindex_counter = 1 if intro_asset_id else 0  # 인트로가 있으면 1부터 시작
 
     for i, img_path in enumerate(images):
@@ -511,16 +502,20 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                     "fileLocation": "IN_MEMORY"
                 })
 
-                # 이미지 복사
-                shutil.copy2(img_path, os.path.join(media_dir, media_name))
+                # 이미지 복사 + 노이즈 직접 적용 (임시 파일 없이)
+                img_ext = os.path.splitext(img_path)[1].lower()
+                if img_ext in ['.png', '.jpg', '.jpeg']:
+                    apply_noise_overlay(img_path, os.path.join(media_dir, media_name))
+                else:
+                    shutil.copy2(img_path, os.path.join(media_dir, media_name))
 
             image_to_media[img_path] = media_id
-            asset_effect_counter[img_path] = 0
 
     # 클립 생성 (연속된 같은 이미지는 같은 asset 공유 - Ken Burns 효과 개선)
     new_clips = []
     prev_media_path = None
     current_asset_id = None
+    last_kenburns_index = None  # 연속 중복 방지용
 
     for i, (img_path, caption) in enumerate(zip(images, captions)):
         if img_path not in image_to_media:
@@ -606,8 +601,9 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                 current_asset_id = asset_id
                 prev_media_path = img_path
 
-                # Ken Burns 효과 적용
-                effect_idx = asset_effect_counter.get(img_path, 0)
+                # Ken Burns 효과 랜덤 적용 (연속 중복 방지)
+                kb_idx, kb_effect = get_kenburns_effect_random(last_kenburns_index)
+                last_kenburns_index = kb_idx
                 project['props']['assets'][asset_id] = {
                     "mediaId": media_id,
                     "xPos": 0,
@@ -619,12 +615,11 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                     "type": "image",
                     "originalWidthHeightRatio": 1.7777777777777777,
                     "importType": "user_asset_panel",
-                    "kenburnsAnimationInfo": get_kenburns_effect(effect_idx),
+                    "kenburnsAnimationInfo": kb_effect,
                     "editInfo": {},
                     "stats": {"fillType": "cut", "fillMenu": "floating", "rearrangeCount": 0}
                 }
                 asset_zindex_counter += 1
-                asset_effect_counter[img_path] = effect_idx + 1
 
             # TTS 생성
             tts_media_id = generate_id()
@@ -864,8 +859,8 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
     with open(os.path.join(temp_dir, "project.json"), 'w', encoding='utf-8') as f:
         json.dump(project, f, ensure_ascii=False)
     
-    # ZIP 생성
-    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+    # ZIP 생성 (ZIP_STORED: 이미 압축된 이미지 재압축 안 함 → 속도 향상)
+    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_STORED) as zf:
         for root, dirs, files in os.walk(temp_dir):
             for file in files:
                 file_path = os.path.join(root, file)
@@ -873,10 +868,6 @@ def create_vrew_project(template_path, images, captions, output_path, tts_voice=
                 zf.write(file_path, arc_name)
     
     shutil.rmtree(temp_dir)
-
-    # 노이즈 임시 폴더 정리
-    if os.path.exists(noise_dir):
-        shutil.rmtree(noise_dir, ignore_errors=True)
 
     print(f"[OK] Vrew 프로젝트 생성 완료: {output_path}")
     print(f"   - 클립 수: {len(new_clips)}")

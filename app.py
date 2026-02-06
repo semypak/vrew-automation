@@ -589,8 +589,8 @@ def main():
         st.markdown("---")
         st.info(f"**총 {len(scenes)}개 씬**에 대한 이미지를 업로드하세요")
 
-        # 로고 오버레이 업로드
-        st.markdown('<h3 style="color: #FF0000;">로고 오버레이 업로드 (선택)</h3>', unsafe_allow_html=True)
+        # 템플릿 업로드
+        st.markdown('<h3 style="color: #FF0000;">템플릿 업로드(선택)</h3>', unsafe_allow_html=True)
         logo_file = st.file_uploader(
             "투명 배경 PNG (1920x1080)",
             type=['png'],
@@ -1251,9 +1251,9 @@ def main():
                             key="download_single_file"
                         )
                 else:
-                    # 파일 여러 개: ZIP으로 묶기 (브라우저 제한)
+                    # 파일 여러 개: ZIP으로 묶기
                     all_files_zip = io.BytesIO()
-                    with zipfile.ZipFile(all_files_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    with zipfile.ZipFile(all_files_zip, 'w', zipfile.ZIP_STORED) as zf:
                         for file_info in st.session_state.generated_vrew_files:
                             if os.path.exists(file_info['path']):
                                 zf.write(file_info['path'], file_info['filename'])
